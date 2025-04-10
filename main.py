@@ -3,9 +3,8 @@ import io
 import base64
 import asyncio
 import tempfile
-# import pyttsx3  # Offline TTS library removed for compatibility
 from flask import Flask, request, jsonify, send_file, render_template
-import requests
+import httpx
 
 app = Flask(__name__)
 
@@ -18,7 +17,7 @@ headers = {
 }
 
 
-def call_gpt4o_with_image(base64_image):
+async def call_gpt4o_with_image(base64_image):
     data = {
         "model": "gpt-4o",
         "messages": [
@@ -33,11 +32,12 @@ def call_gpt4o_with_image(base64_image):
         "max_tokens": 1000
     }
 
-    response = requests.post(OPENAI_API_URL, headers=headers, json=data)
+    async with httpx.AsyncClient() as client:
+        response = await client.post(OPENAI_API_URL, headers=headers, json=data)
     return response
 
 
-def text_to_speech_openai(text):
+async def text_to_speech_openai(text):
     tts_data = {
         "model": "tts-1",
         "input": text,
@@ -48,74 +48,41 @@ def text_to_speech_openai(text):
         "Content-Type": "application/json"
     }
 
-    response = requests.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
-
-    # Debugging: Log the response status and headers
-    print(f"TTS API Response Status: {response.status_code}")
-    print(f"TTS API Response Headers: {response.headers}")
+    async with httpx.AsyncClient() as client:
+        response = await client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
 
     if response.status_code == 200:
         output_path = "/tmp/response.mp3"
         with open(output_path, "wb") as f:
-            has_content = False
-            for chunk in response.iter_content(chunk_size=1024):
-                if chunk:
-                    has_content = True
-                    f.write(chunk)
-        if not has_content:
-            # Debugging: Log if no content was written
-            print("TTS API returned an empty response.")
-            raise Exception("TTS API returned an empty response.")
+            async for chunk in response.aiter_bytes():
+                f.write(chunk)
         return output_path
     else:
-        # Debugging: Log the full response text for errors
-        print(f"TTS API Error Response: {response.text}")
         raise Exception(f"TTS Error: {response.status_code} {response.text}")
 
 
 @app.route("/upload", methods=["POST"])
-def upload_image():
+async def upload_image():
     try:
-        # Check if an image file is uploaded
         file = request.files.get("image")
         if not file:
             return jsonify({"error": "No image uploaded"}), 400
 
-        # Convert the image to Base64
         base64_image = base64.b64encode(file.read()).decode("utf-8")
-
-        # Call GPT-4o API with the image
-        gpt_response = call_gpt4o_with_image(base64_image)
+        gpt_response = await call_gpt4o_with_image(base64_image)
 
         if gpt_response.status_code == 200:
-            try:
-                # Extract the GPT response content
-                reply = gpt_response.json()["choices"][0]["message"]["content"]
-
-                # Run OpenAI TTS
-                audio_path = text_to_speech_openai(reply)
-
-                # Return the audio file
-                return send_file(
-                    audio_path,
-                    mimetype="audio/mpeg",
-                    as_attachment=False,
-                    download_name="response.mp3"
-                )
-            except Exception as e:
-                # Log and return TTS conversion errors
-                print(f"TTS Conversion Error: {str(e)}")
-                return jsonify({"error": "TTS conversion failed", "details": str(e)}), 500
+            reply = gpt_response.json()["choices"][0]["message"]["content"]
+            audio_path = await text_to_speech_openai(reply)
+            return send_file(
+                audio_path,
+                mimetype="audio/mpeg",
+                as_attachment=False,
+                download_name="response.mp3"
+            )
         else:
-            # Log and return GPT API errors
-            print(f"GPT API Error: {gpt_response.status_code}, {gpt_response.text}")
-            return jsonify({
-                "error": "Failed to get response from GPT",
-                "details": gpt_response.text
-            }), 500
+            return jsonify({"error": "Failed to get response from GPT", "details": gpt_response.text}), 500
     except Exception as e:
-        # Log and return unexpected errors
-        print(f"Unexpected Error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
 
 
