@@ -49,12 +49,14 @@ def text_to_speech_openai(text):
 
     response = requests.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
     if response.status_code == 200:
-        with open("response.mp3", "wb") as f:
+        output_path = "/tmp/response.mp3"
+        with open(output_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
-        return "response.mp3"
+        return output_path
     else:
+        print(f"TTS response content: {response.text}")  # Log response
         raise Exception(f"TTS Error: {response.status_code} {response.text}")
 
 
