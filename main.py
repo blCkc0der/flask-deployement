@@ -1,4 +1,4 @@
-import io
+import os
 import base64
 import asyncio
 import tempfile
@@ -10,7 +10,7 @@ import edge_tts  # Microsoft TTS
 app = Flask(__name__)
 
 
-OPENAI_API_KEY = "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"  # Your real key
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")   # Your real key. put it in render enironment variable.
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 
