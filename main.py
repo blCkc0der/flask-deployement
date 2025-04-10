@@ -3,6 +3,7 @@ import io
 import base64
 import asyncio
 import tempfile
+import time
 from flask import Flask, request, jsonify, send_file, render_template
 import httpx
 
@@ -76,8 +77,17 @@ def call_gpt4o_with_image_sync(base64_image):
         "max_tokens": 1000
     }
 
-    response = httpx.post(OPENAI_API_URL, headers=headers, json=data)
-    return response
+    timeout = httpx.Timeout(60.0)  # 60 seconds
+    retries = 3
+    for attempt in range(retries):
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(OPENAI_API_URL, headers=headers, json=data)
+            return response
+        except httpx.RequestError as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            time.sleep(2)  # Wait before retrying
+    raise Exception("Failed to call GPT API after multiple attempts")
 
 
 def text_to_speech_openai_sync(text):
@@ -91,7 +101,10 @@ def text_to_speech_openai_sync(text):
         "Content-Type": "application/json"
     }
 
-    response = httpx.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
+    # Set a custom timeout
+    timeout = httpx.Timeout(60.0)  # 60 seconds
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
 
     if response.status_code == 200:
         output_path = "/tmp/response.mp3"
@@ -106,33 +119,26 @@ def text_to_speech_openai_sync(text):
 @app.route("/upload", methods=["POST"])
 def upload_image():
     try:
-        # Log the start of the request
         print("Received a request to /upload")
 
-        # Check if an image file is uploaded
         file = request.files.get("image")
         if not file:
             print("No image uploaded")
             return jsonify({"error": "No image uploaded"}), 400
 
-        # Convert the image to Base64
         base64_image = base64.b64encode(file.read()).decode("utf-8")
         print("Image successfully converted to Base64")
 
-        # Call GPT-4o API with the image
         gpt_response = call_gpt4o_with_image_sync(base64_image)
         print(f"GPT API response status: {gpt_response.status_code}")
 
         if gpt_response.status_code == 200:
-            # Extract the GPT response content
             reply = gpt_response.json()["choices"][0]["message"]["content"]
             print("GPT API response content successfully extracted")
 
-            # Run OpenAI TTS
             audio_path = text_to_speech_openai_sync(reply)
             print(f"Audio file generated at: {audio_path}")
 
-            # Return the audio file
             return send_file(
                 audio_path,
                 mimetype="audio/mpeg",
@@ -140,14 +146,12 @@ def upload_image():
                 download_name="response.mp3"
             )
         else:
-            # Log GPT API errors
             print(f"GPT API Error: {gpt_response.status_code}, {gpt_response.text}")
             return jsonify({
                 "error": "Failed to get response from GPT",
                 "details": gpt_response.text
             }), 500
     except Exception as e:
-        # Log unexpected errors
         print(f"Unexpected Error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
 
