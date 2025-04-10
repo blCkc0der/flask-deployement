@@ -1,24 +1,21 @@
 import os
 import base64
-import asyncio
 import tempfile
-from flask import Flask, request, jsonify, send_file, render_template # to render htmml template for your website
+import json
+from flask import Flask, request, jsonify, send_file, render_template
 import requests
-import edge_tts  # Microsoft TTS
-
+from google.cloud import texttospeech  # Google TTS
 
 app = Flask(__name__)
 
-
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")   # Your real key. put it in render enironment variable.
+# Load your OpenAI API key from environment variables
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-
 
 headers = {
     "Authorization": f"Bearer {OPENAI_API_KEY}",
     "Content-Type": "application/json"
 }
-
 
 def call_gpt4o_with_image(base64_image):
     data = {
@@ -27,26 +24,49 @@ def call_gpt4o_with_image(base64_image):
             {
                 "role": "user",
                 "content": [
-                    { "type": "text", "text": "Analyse this photo and tell me what symptoms this person exhibits. Then tell me what diseases it might fall under" },
-                    { "type": "image_url", "image_url": { "url": f"data:image/jpeg;base64,{base64_image}" } }
+                    {
+                        "type": "text",
+                        "text": "Analyse this photo and tell me what symptoms this person exhibits. Then tell me what diseases it might fall under."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": { "url": f"data:image/jpeg;base64,{base64_image}" }
+                    }
                 ]
             }
         ],
         "max_tokens": 1000
     }
 
-
     response = requests.post(OPENAI_API_URL, headers=headers, json=data)
     return response
 
+def text_to_speech_google(text):
+    credentials_info = json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+    client = texttospeech.TextToSpeechClient.from_service_account_info(credentials_info)
 
-async def text_to_speech_edge(text):
-    voice = "en-GB-SoniaNeural"  # British female voice, change if you want
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+
+    voice = texttospeech.VoiceSelectionParams(
+        language_code="en-GB",
+        name="en-GB-Wavenet-D"
+    )
+
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3
+    )
+
+    response = client.synthesize_speech(
+        input=synthesis_input,
+        voice=voice,
+        audio_config=audio_config
+    )
+
     temp_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-    communicate = edge_tts.Communicate(text=text, voice=voice)
-    await communicate.save(temp_audio.name)
-    return temp_audio.name
+    with open(temp_audio.name, "wb") as out:
+        out.write(response.audio_content)
 
+    return temp_audio.name
 
 @app.route("/upload", methods=["POST"])
 def upload_image():
@@ -54,18 +74,12 @@ def upload_image():
     if not file:
         return jsonify({"error": "No image uploaded"}), 400
 
-
     base64_image = base64.b64encode(file.read()).decode("utf-8")
     gpt_response = call_gpt4o_with_image(base64_image)
 
-
     if gpt_response.status_code == 200:
         reply = gpt_response.json()["choices"][0]["message"]["content"]
-
-
-        # Run the async edge-tts in sync context
-        audio_path = asyncio.run(text_to_speech_edge(reply))
-
+        audio_path = text_to_speech_google(reply)
 
         return send_file(
             audio_path,
@@ -83,7 +97,5 @@ def upload_image():
 def index():
     return render_template("index.html")
 
-
 if __name__ == "__main__":
     app.run(debug=True)
-
