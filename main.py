@@ -104,7 +104,7 @@ def text_to_speech_openai_sync(text):
     # Set a custom timeout
     timeout = httpx.Timeout(60.0)  # 60 seconds
     with httpx.Client(timeout=timeout) as client:
-        response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
+        response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data)
 
     if response.status_code == 200:
         output_path = "/tmp/response.mp3"
