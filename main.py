@@ -4,12 +4,13 @@ import base64
 import asyncio
 import tempfile
 import pyttsx3  # Offline TTS library
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template
 import requests
 
 app = Flask(__name__)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 headers = {
     "Authorization": f"Bearer {OPENAI_API_KEY}",
     "Content-Type": "application/json"
@@ -65,6 +66,11 @@ def upload_image():
             "error": "Failed to get response from GPT",
             "details": gpt_response.text
         }), 500
+        
+@app.route("/", methods=["GET"])
+def index():
+     return render_template("index.html")
+ 
 
 if __name__ == "__main__":
     app.run(debug=True)
