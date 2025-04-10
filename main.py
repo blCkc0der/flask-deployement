@@ -126,16 +126,19 @@ def upload_image():
             print("No image uploaded")
             return jsonify({"error": "No image uploaded"}), 400
 
+        print("Reading and encoding image...")
         base64_image = base64.b64encode(file.read()).decode("utf-8")
         print("Image successfully converted to Base64")
 
+        print("Calling GPT API...")
         gpt_response = call_gpt4o_with_image_sync(base64_image)
         print(f"GPT API response status: {gpt_response.status_code}")
 
         if gpt_response.status_code == 200:
+            print("Extracting GPT response content...")
             reply = gpt_response.json()["choices"][0]["message"]["content"]
-            print("GPT API response content successfully extracted")
 
+            print("Calling TTS API...")
             audio_path = text_to_speech_openai_sync(reply)
             print(f"Audio file generated at: {audio_path}")
 
@@ -154,6 +157,15 @@ def upload_image():
     except Exception as e:
         print(f"Unexpected Error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
+
+
+@app.route("/test_openai", methods=["GET"])
+def test_openai():
+    try:
+        response = httpx.get("https://api.openai.com/v1/models", headers=headers)
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 
 @app.route("/", methods=["GET"])
