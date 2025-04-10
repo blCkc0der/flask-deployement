@@ -75,34 +75,48 @@ def text_to_speech_openai(text):
 
 @app.route("/upload", methods=["POST"])
 def upload_image():
-    file = request.files.get("image")
-    if not file:
-        return jsonify({"error": "No image uploaded"}), 400
+    try:
+        # Check if an image file is uploaded
+        file = request.files.get("image")
+        if not file:
+            return jsonify({"error": "No image uploaded"}), 400
 
-    base64_image = base64.b64encode(file.read()).decode("utf-8")
-    gpt_response = call_gpt4o_with_image(base64_image)
+        # Convert the image to Base64
+        base64_image = base64.b64encode(file.read()).decode("utf-8")
 
-    if gpt_response.status_code == 200:
-        reply = gpt_response.json()["choices"][0]["message"]["content"]
+        # Call GPT-4o API with the image
+        gpt_response = call_gpt4o_with_image(base64_image)
 
-        try:
-            # Run OpenAI TTS
-            audio_path = text_to_speech_openai(reply)
+        if gpt_response.status_code == 200:
+            try:
+                # Extract the GPT response content
+                reply = gpt_response.json()["choices"][0]["message"]["content"]
 
-            return send_file(
-                audio_path,
-                mimetype="audio/mpeg",
-                as_attachment=False,
-                download_name="response.mp3"
-            )
-        except Exception as e:
-            return jsonify({"error": "TTS conversion failed", "details": str(e)}), 500
+                # Run OpenAI TTS
+                audio_path = text_to_speech_openai(reply)
 
-    else:
-        return jsonify({
-            "error": "Failed to get response from GPT",
-            "details": gpt_response.text
-        }), 500
+                # Return the audio file
+                return send_file(
+                    audio_path,
+                    mimetype="audio/mpeg",
+                    as_attachment=False,
+                    download_name="response.mp3"
+                )
+            except Exception as e:
+                # Log and return TTS conversion errors
+                print(f"TTS Conversion Error: {str(e)}")
+                return jsonify({"error": "TTS conversion failed", "details": str(e)}), 500
+        else:
+            # Log and return GPT API errors
+            print(f"GPT API Error: {gpt_response.status_code}, {gpt_response.text}")
+            return jsonify({
+                "error": "Failed to get response from GPT",
+                "details": gpt_response.text
+            }), 500
+    except Exception as e:
+        # Log and return unexpected errors
+        print(f"Unexpected Error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
 
 
 @app.route("/", methods=["GET"])
