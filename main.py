@@ -1,9 +1,8 @@
-import os
 import io
 import base64
 import asyncio
 import tempfile
-import pyttsx3  # Offline TTS library
+# import pyttsx3  # Offline TTS library removed for compatibility
 from flask import Flask, request, jsonify, send_file, render_template
 import requests
 
@@ -11,10 +10,12 @@ app = Flask(__name__)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
 headers = {
     "Authorization": f"Bearer {OPENAI_API_KEY}",
     "Content-Type": "application/json"
 }
+
 
 def call_gpt4o_with_image(base64_image):
     data = {
@@ -34,11 +35,28 @@ def call_gpt4o_with_image(base64_image):
     response = requests.post(OPENAI_API_URL, headers=headers, json=data)
     return response
 
-def text_to_speech_pyttsx3(text):
-    engine = pyttsx3.init()  # Initialize the pyttsx3 engine
-    engine.save_to_file(text, 'response.mp3')  # Save audio to file
-    engine.runAndWait()  # Wait for the speech to finish
-    return 'response.mp3'  # Return the file path
+
+def text_to_speech_openai(text):
+    tts_data = {
+        "model": "tts-1",
+        "input": text,
+        "voice": "onyx"
+    }
+    tts_headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
+    if response.status_code == 200:
+        with open("response.mp3", "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+        return "response.mp3"
+    else:
+        raise Exception(f"TTS Error: {response.status_code} {response.text}")
+
 
 @app.route("/upload", methods=["POST"])
 def upload_image():
@@ -52,26 +70,30 @@ def upload_image():
     if gpt_response.status_code == 200:
         reply = gpt_response.json()["choices"][0]["message"]["content"]
 
-        # Run the offline TTS (pyttsx3)
-        audio_path = text_to_speech_pyttsx3(reply)
+        try:
+            # Run OpenAI TTS
+            audio_path = text_to_speech_openai(reply)
 
-        return send_file(
-            audio_path,
-            mimetype="audio/mpeg",
-            as_attachment=False,
-            download_name="response.mp3"
-        )
+            return send_file(
+                audio_path,
+                mimetype="audio/mpeg",
+                as_attachment=False,
+                download_name="response.mp3"
+            )
+        except Exception as e:
+            return jsonify({"error": "TTS conversion failed", "details": str(e)}), 500
+
     else:
         return jsonify({
             "error": "Failed to get response from GPT",
             "details": gpt_response.text
         }), 500
-        
+
+
 @app.route("/", methods=["GET"])
 def index():
-     return render_template("index.html")
- 
+    return render_template("index.html")
+
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
-
