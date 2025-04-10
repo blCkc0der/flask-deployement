@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: my-flask-app
+    env: python
+    plan: free  # You can change this to a higher plan depending on your requirements
+    buildCommand: pip install -r requirements.txt  # This installs dependencies from your requirements.txt
+    startCommand: gunicorn main:app --timeout 300  # Start your Flask app with Gunicorn, setting a timeout
+    envVars:
+      - key: OPENAI_API_KEY
+        value: "your_openai_api_key_here"
+    autoscale:
+      minInstances: 1
+      maxInstances: 2
+    healthCheckPath: /  # Optional, health check path (could be '/' or a custom endpoint)
+
+databases: []
+caches: []
+staticSites: []
