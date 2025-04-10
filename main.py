@@ -9,7 +9,7 @@ import requests
 
 app = Flask(__name__)
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+OPENAI_API_KEY = "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"
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
 headers = {
@@ -49,15 +49,27 @@ def text_to_speech_openai(text):
     }
 
     response = requests.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
+
+    # Debugging: Log the response status and headers
+    print(f"TTS API Response Status: {response.status_code}")
+    print(f"TTS API Response Headers: {response.headers}")
+
     if response.status_code == 200:
         output_path = "/tmp/response.mp3"
         with open(output_path, "wb") as f:
+            has_content = False
             for chunk in response.iter_content(chunk_size=1024):
                 if chunk:
+                    has_content = True
                     f.write(chunk)
+        if not has_content:
+            # Debugging: Log if no content was written
+            print("TTS API returned an empty response.")
+            raise Exception("TTS API returned an empty response.")
         return output_path
     else:
-        print(f"TTS response content: {response.text}")  # Log response
+        # Debugging: Log the full response text for errors
+        print(f"TTS API Error Response: {response.text}")
         raise Exception(f"TTS Error: {response.status_code} {response.text}")
 
 
