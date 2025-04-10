@@ -1,0 +1,14 @@
+/*HTML upload form so your little renad self can upload an image directly from the browser*/
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Upload an Image</title>
+  </head>
+  <body>
+    <h1>Upload an Image for GPT Analysis</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+      <input type="file" name="image" accept="image/*" required />
+      <input type="submit" value="Upload" />
+    </form>
+  </body>
+</html>

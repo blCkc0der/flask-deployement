@@ -2,7 +2,7 @@ import os
 import base64
 import asyncio
 import tempfile
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template # to render htmml template for your website
 import requests
 import edge_tts  # Microsoft TTS
 
@@ -78,6 +78,10 @@ def upload_image():
             "error": "Failed to get response from GPT",
             "details": gpt_response.text
         }), 500
+
+@app.route("/", methods=["GET"])
+def index():
+    return render_template("index.html")
 
 
 if __name__ == "__main__":
