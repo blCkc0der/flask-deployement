@@ -77,7 +77,7 @@ def call_gpt4o_with_image_sync(base64_image):
         "max_tokens": 1000
     }
 
-    timeout = httpx.Timeout(60.0)  # 60 seconds
+    timeout = httpx.Timeout(200)  # 60 seconds
     retries = 3
     for attempt in range(retries):
         try:
