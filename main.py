@@ -69,25 +69,23 @@ def text_to_speech_openai_sync(text):
 
     try:
         with httpx.Client(timeout=timeout) as client:
-            response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data)
+            with client.stream("POST", OPENAI_TTS_URL, headers=tts_headers, json=tts_data) as response:
+                print(f"TTS API Response Status: {response.status_code}")
+                print(f"TTS API Response Headers: {response.headers}")
 
-        # Log the response details
-        print(f"TTS API Response Status: {response.status_code}")
-        print(f"TTS API Response Headers: {response.headers}")
-        print(f"TTS API Response Content Length: {len(response.content)}")
-        print(f"TTS API Response Content (first 100 bytes): {response.content[:100]}")
+                if response.status_code != 200:
+                    raise Exception(f"TTS Error: {response.status_code} {response.text}")
 
-        if response.status_code != 200:
-            raise Exception(f"TTS Error: {response.status_code} {response.text}")
-
-        # Write the audio content
-        with open(output_path, "wb") as f:
-            f.write(response.content)
+                # Write the audio content in chunks
+                with open(output_path, "wb") as f:
+                    for chunk in response.iter_bytes():
+                        f.write(chunk)
 
         # Confirm audio is not empty
-        if os.path.getsize(output_path) == 0:
-            print("TTS API returned an empty audio file.")
-            return jsonify({"error": "TTS API returned an empty audio file"}), 500
+        file_size = os.path.getsize(output_path)
+        print(f"Audio file size after writing: {file_size} bytes")
+        if file_size == 0:
+            raise Exception("TTS API returned an empty audio file")
 
         return output_path
 
@@ -146,6 +144,16 @@ def test_openai():
         response = httpx.get("https://api.openai.com/v1/models", headers=headers)
         print(f"Test OpenAI API Response: {response.status_code}")
         return jsonify(response.json())
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/test_write", methods=["GET"])
+def test_write():
+    try:
+        test_path = "/tmp/test_file.txt"
+        with open(test_path, "w") as f:
+            f.write("This is a test.")
+        return jsonify({"message": "File written successfully", "path": test_path})
     except Exception as e:
         return jsonify({"error": str(e)})
 
