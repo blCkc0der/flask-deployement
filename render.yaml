@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: your-service-name
+    name: gpt4-vision-audio-api
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn main:app --bind 0.0.0.0:$PORT --timeout 120"
+    startCommand: "gunicorn main:app --bind 0.0.0.0:$PORT --timeout 300"
     autoDeploy: true
     envVars:
       - key: OPENAI_API_KEY
@@ -11,10 +11,4 @@ services:
     autoscale:
       minInstances: 1
       maxInstances: 2
-    healthCheckPath: /  # Optional, health check path (could be '/' or a custom endpoint)
-
-databases: []
-caches: []
-staticSites: []
-
-
+    healthCheckPath: /ping  # We’ll add this endpoint below
