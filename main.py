@@ -64,27 +64,22 @@ def text_to_speech_openai_sync(text):
     output_path = "/tmp/response.mp3"
     timeout = httpx.Timeout(200.0)
 
-    print("Calling TTS endpoint...")
     with httpx.Client(timeout=timeout) as client:
-        with client.stream("POST", OPENAI_TTS_URL, headers=tts_headers, json=tts_data) as response:
-            print(f"TTS Response status: {response.status_code}")
-            if response.status_code != 200:
-                raise Exception(f"TTS Error: {response.status_code} {response.text}")
+        response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data)
 
-            total_written = 0
-            with open(output_path, "wb") as f:
-                for chunk in response.iter_bytes():
-                    if chunk:
-                        print(f"Writing {len(chunk)} bytes...")
-                        f.write(chunk)
-                        total_written += len(chunk)
+    if response.status_code != 200:
+        raise Exception(f"TTS Error: {response.status_code} {response.text}")
 
-            print(f"Finished writing {total_written} bytes to {output_path}")
-            if total_written == 0:
-                raise Exception("TTS API returned empty audio stream")
+    # Write raw binary content to file
+    with open(output_path, "wb") as f:
+        f.write(response.content)
+
+    # Confirm audio is not empty
+    if os.path.getsize(output_path) == 0:
+        raise Exception("TTS API returned empty audio file")
 
     return output_path
-
+    
 @app.route("/upload", methods=["POST"])
 def upload_image():
     try:
