@@ -7,7 +7,7 @@ services:
     autoDeploy: true
     envVars:
       - key: OPENAI_API_KEY
-        value: "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"
+        value: "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"
     autoscale:
       minInstances: 1
       maxInstances: 2
