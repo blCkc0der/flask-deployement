@@ -21,7 +21,7 @@ headers = {
 
 def clean_text_for_tts(text):
     text = re.sub(r'\*+', '', text)  # remove markdown bold/italic
-    text = re.sub(r'[_`~]', '', text)  # remove code symbols
+    text = re.sub(r'[_~]', '', text)  # remove code symbols
     return text.strip()
 
 def call_gpt4o_with_image_sync(base64_image):
@@ -69,14 +69,18 @@ def text_to_speech_openai_sync(text):
 
     try:
         with httpx.Client(timeout=timeout) as client:
-            with client.stream("POST", OPENAI_TTS_URL, headers=tts_headers, json=tts_data) as response:
-                print(f"TTS API Response Status: {response.status_code}")
-                if response.status_code != 200:
-                    raise Exception(f"TTS Error: {response.status_code} {response.text}")
+            response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data)
 
-                with open(output_path, "wb") as f:
-                    for chunk in response.iter_bytes():
-                        f.write(chunk)
+        print(f"TTS API Response Status: {response.status_code}")
+        print(f"TTS API Response Headers: {response.headers}")
+        print(f"TTS API Response Content (first 100 bytes): {response.content[:100]}")
+
+        if response.status_code != 200:
+            raise Exception(f"TTS Error: {response.status_code} {response.text}")
+
+        # Write the audio content
+        with open(output_path, "wb") as f:
+            f.write(response.content)
 
         if os.path.getsize(output_path) == 0:
             print("TTS API returned an empty audio file.")
