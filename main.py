@@ -101,18 +101,18 @@ def text_to_speech_openai_sync(text):
         "Content-Type": "application/json"
     }
 
-    timeout = httpx.Timeout(200.0) 
-    with httpx.Client(timeout=timeout) as client:
-        response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data)
+    output_path = "/tmp/response.mp3"
+    timeout = httpx.Timeout(200.0)
 
-    if response.status_code == 200:
-        output_path = "/tmp/response.mp3"
-        with open(output_path, "wb") as f:
-            for chunk in response.iter_bytes():
-                f.write(chunk)
-        return output_path
-    else:
-        raise Exception(f"TTS Error: {response.status_code} {response.text}")
+    with httpx.Client(timeout=timeout) as client:
+        with client.stream("POST", OPENAI_TTS_URL, headers=tts_headers, json=tts_data) as response:
+            if response.status_code == 200:
+                with open(output_path, "wb") as f:
+                    for chunk in response.iter_bytes():
+                        f.write(chunk)
+                return output_path
+            else:
+                raise Exception(f"TTS Error: {response.status_code} {response.text}")
 
 
 @app.route("/upload", methods=["POST"])
