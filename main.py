@@ -67,6 +67,11 @@ def text_to_speech_openai_sync(text):
     with httpx.Client(timeout=timeout) as client:
         response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data)
 
+    # Log the response details
+    print(f"TTS API Response Status: {response.status_code}")
+    print(f"TTS API Response Headers: {response.headers}")
+    print(f"TTS API Response Content: {response.content[:100]}")  # Log the first 100 bytes of the content
+
     if response.status_code != 200:
         raise Exception(f"TTS Error: {response.status_code} {response.text}")
 
@@ -76,7 +81,8 @@ def text_to_speech_openai_sync(text):
 
     # Confirm audio is not empty
     if os.path.getsize(output_path) == 0:
-        raise Exception("TTS API returned empty audio file")
+        print("TTS API returned an empty audio file.")
+        return jsonify({"error": "TTS API returned an empty audio file"}), 500
 
     return output_path
     
@@ -105,7 +111,7 @@ def upload_image():
 
             print("Sanitizing GPT reply for TTS...")
             clean_reply = clean_text_for_tts(reply)
-            print("Cleaned reply:", clean_reply)
+            print("Cleaned reply for TTS:", clean_reply)
 
             print("Calling TTS API...")
             audio_path = text_to_speech_openai_sync(clean_reply)
@@ -131,6 +137,7 @@ def upload_image():
 def test_openai():
     try:
         response = httpx.get("https://api.openai.com/v1/models", headers=headers)
+        print(f"Test OpenAI API Response: {response.status_code}")
         return jsonify(response.json())
     except Exception as e:
         return jsonify({"error": str(e)})
