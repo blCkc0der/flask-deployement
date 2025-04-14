@@ -9,7 +9,7 @@ import httpx
 
 app = Flask(__name__)
 
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "key_Wo7FLpHtWc8dBhtl"
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
 headers = {
