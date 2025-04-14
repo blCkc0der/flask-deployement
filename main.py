@@ -18,50 +18,6 @@ headers = {
 }
 
 
-async def call_gpt4o_with_image(base64_image):
-    data = {
-        "model": "gpt-4o",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Answer the question that this image shows, make sure I get awarded full marks for this A-level exam question. Format it in a way that makes it readable and understandable by text-to-speech."},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                ]
-            }
-        ],
-        "max_tokens": 1000
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(OPENAI_API_URL, headers=headers, json=data)
-    return response
-
-
-async def text_to_speech_openai(text):
-    tts_data = {
-        "model": "tts-1",
-        "input": text,
-        "voice": "onyx"
-    }
-    tts_headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
-
-    if response.status_code == 200:
-        output_path = "/tmp/response.mp3"
-        with open(output_path, "wb") as f:
-            async for chunk in response.aiter_bytes():
-                f.write(chunk)
-        return output_path
-    else:
-        raise Exception(f"TTS Error: {response.status_code} {response.text}")
-
-
 def call_gpt4o_with_image_sync(base64_image):
     data = {
         "model": "gpt-4o",
@@ -77,7 +33,7 @@ def call_gpt4o_with_image_sync(base64_image):
         "max_tokens": 1000
     }
 
-    timeout = httpx.Timeout(200.0)  
+    timeout = httpx.Timeout(200.0)
     retries = 3
     for attempt in range(retries):
         try:
@@ -86,7 +42,7 @@ def call_gpt4o_with_image_sync(base64_image):
             return response
         except httpx.RequestError as e:
             print(f"Attempt {attempt + 1} failed: {e}")
-            time.sleep(2) 
+            time.sleep(2)
     raise Exception("Failed to call GPT API after multiple attempts")
 
 
@@ -106,13 +62,20 @@ def text_to_speech_openai_sync(text):
 
     with httpx.Client(timeout=timeout) as client:
         with client.stream("POST", OPENAI_TTS_URL, headers=tts_headers, json=tts_data) as response:
-            if response.status_code == 200:
-                with open(output_path, "wb") as f:
-                    for chunk in response.iter_bytes():
-                        f.write(chunk)
-                return output_path
-            else:
+            if response.status_code != 200:
                 raise Exception(f"TTS Error: {response.status_code} {response.text}")
+
+            total_written = 0
+            with open(output_path, "wb") as f:
+                for chunk in response.iter_bytes():
+                    if chunk:
+                        f.write(chunk)
+                        total_written += len(chunk)
+
+            if total_written == 0:
+                raise Exception("TTS API returned empty audio stream")
+
+    return output_path
 
 
 @app.route("/upload", methods=["POST"])
@@ -136,6 +99,7 @@ def upload_image():
         if gpt_response.status_code == 200:
             print("Extracting GPT response content...")
             reply = gpt_response.json()["choices"][0]["message"]["content"]
+            print("GPT reply:", reply)
 
             print("Calling TTS API...")
             audio_path = text_to_speech_openai_sync(reply)
