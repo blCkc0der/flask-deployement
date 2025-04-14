@@ -1,8 +1,5 @@
 import os
-import io
 import base64
-import asyncio
-import tempfile
 import time
 import re
 from flask import Flask, request, jsonify, send_file, render_template
@@ -19,8 +16,8 @@ headers = {
 }
 
 def clean_text_for_tts(text):
-    text = re.sub(r'\*+', '', text)  # remove bold/italic markdown
-    text = re.sub(r'[_`~]', '', text)  # remove code or symbols
+    text = re.sub(r'\*+', '', text)  # remove markdown bold/italic
+    text = re.sub(r'[_`~]', '', text)  # remove code symbols
     return text.strip()
 
 def call_gpt4o_with_image_sync(base64_image):
@@ -51,6 +48,8 @@ def call_gpt4o_with_image_sync(base64_image):
     raise Exception("Failed to call GPT API after multiple attempts")
 
 def text_to_speech_openai_sync(text):
+    print(f"TTS input text: '{text}'")
+
     tts_data = {
         "model": "tts-1",
         "input": text,
@@ -64,28 +63,31 @@ def text_to_speech_openai_sync(text):
     output_path = "/tmp/response.mp3"
     timeout = httpx.Timeout(200.0)
 
-    with httpx.Client(timeout=timeout) as client:
-        response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data)
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(OPENAI_TTS_URL, headers=tts_headers, json=tts_data, stream=True)
 
-    # Log the response details
-    print(f"TTS API Response Status: {response.status_code}")
-    print(f"TTS API Response Headers: {response.headers}")
-    print(f"TTS API Response Content: {response.content[:100]}")  # Log the first 100 bytes of the content
+        print(f"TTS API Response Status: {response.status_code}")
+        print(f"TTS API Response Headers: {response.headers}")
+        print(f"TTS API Response Content (first 100 bytes): {response.content[:100]}")
 
-    if response.status_code != 200:
-        raise Exception(f"TTS Error: {response.status_code} {response.text}")
+        if response.status_code != 200:
+            raise Exception(f"TTS Error: {response.status_code} {response.text}")
 
-    # Write raw binary content to file
-    with open(output_path, "wb") as f:
-        f.write(response.content)
+        # Write the audio content
+        with open(output_path, "wb") as f:
+            f.write(response.content)
 
-    # Confirm audio is not empty
-    if os.path.getsize(output_path) == 0:
-        print("TTS API returned an empty audio file.")
-        return jsonify({"error": "TTS API returned an empty audio file"}), 500
+        if os.path.getsize(output_path) == 0:
+            print("TTS API returned an empty audio file.")
+            raise Exception("TTS API returned an empty audio file")
 
-    return output_path
-    
+        return output_path
+
+    except Exception as e:
+        print(f"TTS Exception: {str(e)}")
+        raise
+
 @app.route("/upload", methods=["POST"])
 def upload_image():
     try:
@@ -105,11 +107,9 @@ def upload_image():
         print(f"GPT API response status: {gpt_response.status_code}")
 
         if gpt_response.status_code == 200:
-            print("Extracting GPT response content...")
             reply = gpt_response.json()["choices"][0]["message"]["content"]
             print("Raw GPT reply:", reply)
 
-            print("Sanitizing GPT reply for TTS...")
             clean_reply = clean_text_for_tts(reply)
             print("Cleaned reply for TTS:", clean_reply)
 
