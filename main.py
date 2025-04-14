@@ -4,6 +4,7 @@ import base64
 import asyncio
 import tempfile
 import time
+import re
 from flask import Flask, request, jsonify, send_file, render_template
 import httpx
 
@@ -17,6 +18,10 @@ headers = {
     "Content-Type": "application/json"
 }
 
+def clean_text_for_tts(text):
+    text = re.sub(r'\*+', '', text)  # remove bold/italic markdown
+    text = re.sub(r'[_`~]', '', text)  # remove code or symbols
+    return text.strip()
 
 def call_gpt4o_with_image_sync(base64_image):
     data = {
@@ -45,7 +50,6 @@ def call_gpt4o_with_image_sync(base64_image):
             time.sleep(2)
     raise Exception("Failed to call GPT API after multiple attempts")
 
-
 def text_to_speech_openai_sync(text):
     tts_data = {
         "model": "tts-1",
@@ -60,8 +64,10 @@ def text_to_speech_openai_sync(text):
     output_path = "/tmp/response.mp3"
     timeout = httpx.Timeout(200.0)
 
+    print("Calling TTS endpoint...")
     with httpx.Client(timeout=timeout) as client:
         with client.stream("POST", OPENAI_TTS_URL, headers=tts_headers, json=tts_data) as response:
+            print(f"TTS Response status: {response.status_code}")
             if response.status_code != 200:
                 raise Exception(f"TTS Error: {response.status_code} {response.text}")
 
@@ -69,14 +75,15 @@ def text_to_speech_openai_sync(text):
             with open(output_path, "wb") as f:
                 for chunk in response.iter_bytes():
                     if chunk:
+                        print(f"Writing {len(chunk)} bytes...")
                         f.write(chunk)
                         total_written += len(chunk)
 
+            print(f"Finished writing {total_written} bytes to {output_path}")
             if total_written == 0:
                 raise Exception("TTS API returned empty audio stream")
 
     return output_path
-
 
 @app.route("/upload", methods=["POST"])
 def upload_image():
@@ -99,10 +106,14 @@ def upload_image():
         if gpt_response.status_code == 200:
             print("Extracting GPT response content...")
             reply = gpt_response.json()["choices"][0]["message"]["content"]
-            print("GPT reply:", reply)
+            print("Raw GPT reply:", reply)
+
+            print("Sanitizing GPT reply for TTS...")
+            clean_reply = clean_text_for_tts(reply)
+            print("Cleaned reply:", clean_reply)
 
             print("Calling TTS API...")
-            audio_path = text_to_speech_openai_sync(reply)
+            audio_path = text_to_speech_openai_sync(clean_reply)
             print(f"Audio file generated at: {audio_path}")
 
             return send_file(
@@ -121,7 +132,6 @@ def upload_image():
         print(f"Unexpected Error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
 
-
 @app.route("/test_openai", methods=["GET"])
 def test_openai():
     try:
@@ -130,11 +140,9 @@ def test_openai():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
-
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
