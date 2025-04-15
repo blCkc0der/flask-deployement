@@ -79,7 +79,7 @@ def text_to_speech_openai_sync(text):
                     raise Exception(f"TTS Error: {response.status_code} {error_message}")
 
                 # Write the audio content in chunks
-                with  mnqa`b open(output_path, "wb") as f:
+                with open(output_path, "wb") as f:  # Fixed syntax here
                     for chunk in response.iter_bytes():
                         if chunk:  # Ensure the chunk is not empty
                             f.write(chunk)
