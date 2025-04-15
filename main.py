@@ -72,14 +72,14 @@ def text_to_speech_openai_sync(text):
             with client.stream("POST", OPENAI_TTS_URL, headers=tts_headers, json=tts_data) as response:
                 print(f"TTS API Response Status: {response.status_code}")
                 print(f"TTS API Response Headers: {response.headers}")
-                print(f"TTS API Response Content Length: {len(response.content)}")
-                print(f"TTS API Response Content (first 100 bytes): {response.content[:100]}")
 
                 if response.status_code != 200:
-                    raise Exception(f"TTS Error: {response.status_code} {response.text}")
+                    # Read the response body to include it in the error message
+                    error_message = b"".join(response.iter_bytes()).decode("utf-8")
+                    raise Exception(f"TTS Error: {response.status_code} {error_message}")
 
                 # Write the audio content in chunks
-                with open(output_path, "wb") as f:
+                with  mnqa`b open(output_path, "wb") as f:
                     for chunk in response.iter_bytes():
                         if chunk:  # Ensure the chunk is not empty
                             f.write(chunk)
