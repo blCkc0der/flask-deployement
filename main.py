@@ -72,7 +72,6 @@ def text_to_speech_openai_sync(text):
             with client.stream("POST", OPENAI_TTS_URL, headers=tts_headers, json=tts_data) as response:
                 print(f"TTS API Response Status: {response.status_code}")
                 print(f"TTS API Response Headers: {response.headers}")
-                print(f"TTS API Response Content (first 100 bytes): {response.content[:100]}")
 
                 if response.status_code != 200:
                     # Read the response body to include it in the error message
