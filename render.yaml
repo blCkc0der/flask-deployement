@@ -1,14 +1,10 @@
 services:
   - type: web
-    name: gpt4-vision-audio-api
+    name: flask-resnet-analyzer
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn main:app --bind 0.0.0.0:$PORT --timeout 300"
-    autoDeploy: true
+    plan: free
+    buildCommand: ""
+    startCommand: python main.py
     envVars:
-      - key: OPENAI_API_KEY
-        value: "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"
-    autoscale:
-      minInstances: 1
-      maxInstances: 2
-    healthCheckPath: /ping  # We’ll add this endpoint below
+      - key: PYTHON_VERSION
+        value: 3.10
