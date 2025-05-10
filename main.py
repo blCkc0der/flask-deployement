@@ -1,5 +1,3 @@
-
-
 from flask import Flask, request, jsonify, send_file, render_template_string
 from gtts import gTTS
 import cv2
@@ -32,6 +30,9 @@ import re
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
+
+if not OPENAI_API_KEY:
+    raise EnvironmentError("OPENAI_API_KEY is not set. Please configure it as an environment variable.")
 
 def call_gpt4o_with_image_sync(base64_image):
     data = {
@@ -100,7 +101,6 @@ CORS(app)
 
 # Configuration
 PORT = 5000
-NGROK_AUTH_TOKEN = "2qqvgcNkpXN0gXV5r5MwO1SgSCn_3k8UAFBfMxoZgoXSVMBhh" 
 UPLOAD_FOLDER = '/tmp/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -395,293 +395,10 @@ def cleanup():
     """Cleanup resources when app exits."""
     logger.info("Shutting down gracefully...")
     stream_active.clear()
-    try:
-        ngrok.kill()
-    except:
-        pass
-
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>ResNet18 Image Analyzer</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .container { background: #f5f8fa; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #3498db; }
-        input, button, select { padding: 10px; margin: 10px 0; border-radius: 4px; border: 1px solid #ddd; }
-        button { background: #3498db; color: white; border: none; cursor: pointer; transition: background 0.3s; }
-        button:hover { background: #2980b9; }
-        button:disabled { background: #95a5a6; }
-        #result { margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px; display: none; }
-        .result-image { max-width: 100%; margin: 10px 0; border-radius: 4px; }
-        audio { width: 100%; margin-top: 10px; }
-        #preview-image { max-width: 100%; margin: 10px 0; border-radius: 4px; display: none; }
-        .loading { display: none; text-align: center; margin: 20px 0; }
-        .loading:after {
-            content: " .";
-            animation: dots 1s steps(5, end) infinite;
-        }
-        @keyframes dots {
-            0%, 20% { color: rgba(0,0,0,0); text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); }
-            40% { color: black; text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); }
-            60% { text-shadow: .25em 0 0 black, .5em 0 0 rgba(0,0,0,0); }
-            80%, 100% { text-shadow: .25em 0 0 black, .5em 0 0 black; }
-        }
-        .progress-container {
-            margin-top: 10px;
-            width: 100%;
-            background-color: #f3f3f3;
-            border-radius: 4px;
-            display: none;
-        }
-        .progress-bar {
-            height: 10px;
-            border-radius: 4px;
-            background-color: #3498db;
-            width: 0%;
-            transition: width 0.3s;
-        }
-        .status {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .status-active {
-            background-color: #2ecc71;
-            color: white;
-        }
-        .status-idle {
-            background-color: #95a5a6;
-            color: white;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>ResNet18 Image Analyzer</h1>
-
-        <div id="model-status">
-            <p>ResNet18 Model Status: <span id="model-status-text">Loading...</span></p>
-        </div>
-
-        <div>
-            <h3>Single Image Analysis</h3>
-            <input type="file" id="image-file" accept="image/*">
-            <p>OR</p>
-            <input type="text" id="image-url" placeholder="Enter image URL">
-            <button id="analyze-btn">Analyze Image</button>
-            <div class="loading" id="loading-single">Processing</div>
-            <img id="preview-image">
-        </div>
-
-        <div id="livestream-controls">
-            <h3>Livestream Processing</h3>
-            <input type="text" id="stream-url" placeholder="Enter livestream URL (RTSP, HTTP, etc.)">
-            <div>
-                <label for="interval">Analysis Interval:</label>
-                <select id="interval">
-                    <option value="1">1 second</option>
-                    <option value="5">5 seconds</option>
-                    <option value="10" selected>10 seconds</option>
-                    <option value="30">30 seconds</option>
-                </select>
-            </div>
-            <button id="start-stream-btn">Start Processing</button>
-            <button id="stop-stream-btn" disabled>Stop Processing</button>
-            <p>Status: <span id="stream-status" class="status status-idle">Idle</span></p>
-            <div class="progress-container" id="stream-progress-container">
-                <div class="progress-bar" id="stream-progress"></div>
-            </div>
-        </div>
-
-        <div id="result">
-            <h3>Analysis Result:</h3>
-            <img id="result-image" class="result-image">
-            <p id="analysis-text"></p>
-            <audio id="audio-player" controls autoplay></audio>
-        </div>
-    </div>
-
-    <script>
-        // Check model status when page loads
-        document.addEventListener('DOMContentLoaded', async function() {
-            try {
-                const response = await fetch('/api/model_status');
-                const data = await response.json();
-                document.getElementById('model-status-text').textContent =
-                    data.loaded ? 'Ready' : 'Failed to load (using fallback)';
-            } catch (error) {
-                document.getElementById('model-status-text').textContent = 'Error checking status';
-            }
-        });
-
-        // Preview uploaded image
-        document.getElementById('image-file').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const img = document.getElementById('preview-image');
-                    img.src = event.target.result;
-                    img.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        // Single image analysis
-        document.getElementById('analyze-btn').addEventListener('click', async () => {
-            const fileInput = document.getElementById('image-file');
-            const urlInput = document.getElementById('image-url').value;
-            const resultDiv = document.getElementById('result');
-            const loading = document.getElementById('loading-single');
-
-            const formData = new FormData();
-
-            if (fileInput.files.length > 0) {
-                formData.append('image', fileInput.files[0]);
-            } else if (urlInput) {
-                formData.append('image_url', urlInput);
-            } else {
-                alert('Please upload an image or provide a URL');
-                return;
-            }
-
-            try {
-                // Show loading indicator
-                loading.style.display = 'block';
-                resultDiv.style.display = 'none';
-
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('analysis-text').textContent = data.analysis;
-
-                    // Display the analyzed image with label overlay
-                    const resultImage = document.getElementById('result-image');
-                    resultImage.src = data.image_url;
-
-                    // Set up audio player
-                    const audioPlayer = document.getElementById('audio-player');
-                    audioPlayer.src = data.audio_url;
-                    audioPlayer.play();
-
-                    resultDiv.style.display = 'block';
-                } else {
-                    throw new Error(await response.text());
-                }
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            } finally {
-                loading.style.display = 'none';
-            }
-        });
-
-        // Livestream processing
-        const startBtn = document.getElementById('start-stream-btn');
-        const stopBtn = document.getElementById('stop-stream-btn');
-        const statusSpan = document.getElementById('stream-status');
-        const progressContainer = document.getElementById('stream-progress-container');
-        const progressBar = document.getElementById('stream-progress');
-        let eventSource;
-        let intervalId;
-
-        startBtn.addEventListener('click', async () => {
-            const streamUrl = document.getElementById('stream-url').value;
-            const interval = document.getElementById('interval').value;
-
-            if (!streamUrl) {
-                alert('Please enter a stream URL');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/start_stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ stream_url: streamUrl, interval: parseInt(interval) })
-                });
-
-                if (response.ok) {
-                    statusSpan.textContent = "Processing";
-                    statusSpan.className = "status status-active";
-                    startBtn.disabled = true;
-                    stopBtn.disabled = false;
-                    progressContainer.style.display = 'block';
-
-                    // Update progress bar based on interval
-                    let progress = 0;
-                    progressBar.style.width = '0%';
-
-                    intervalId = setInterval(() => {
-                        progress = (progress + 1) % (parseInt(interval) + 1);
-                        const percentage = (progress / parseInt(interval)) * 100;
-                        progressBar.style.width = `${percentage}%`;
-                    }, 1000);
-
-                    // Listen for updates
-                    eventSource = new EventSource('/api/stream_updates');
-
-                    eventSource.onmessage = (event) => {
-                        const data = JSON.parse(event.data);
-                        if (data.image_url && data.audio_url) {
-                            document.getElementById('analysis-text').textContent = data.analysis;
-                            document.getElementById('result-image').src = data.image_url;
-
-                            const audioPlayer = document.getElementById('audio-player');
-                            audioPlayer.src = data.audio_url;
-                            audioPlayer.play();
-
-                            document.getElementById('result').style.display = 'block';
-
-                            // Reset progress bar
-                            progress = 0;
-                            progressBar.style.width = '0%';
-                        }
-                    };
-                } else {
-                    throw new Error(await response.text());
-                }
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            }
-        });
-
-        stopBtn.addEventListener('click', async () => {
-            try {
-                await fetch('/api/stop_stream', { method: 'POST' });
-                statusSpan.textContent = "Idle";
-                statusSpan.className = "status status-idle";
-                startBtn.disabled = false;
-                stopBtn.disabled = true;
-                progressContainer.style.display = 'none';
-
-                if (intervalId) {
-                    clearInterval(intervalId);
-                }
-
-                if (eventSource) {
-                    eventSource.close();
-                }
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            }
-        });
-    </script>
-</body>
-</html>
-"""
 
 @app.route('/')
 def home():
-    return render_template_string(HTML_TEMPLATE)
+    return render_template('index.html')
 
 @app.route('/api/model_status')
 def model_status():
@@ -839,36 +556,8 @@ def serve_image(filename):
     except FileNotFoundError:
         return "Image not found", 404
 
-def start_ngrok():
-    """Start ngrok tunnel and return public URL."""
-    try:
-        
-        ngrok.set_auth_token(NGROK_AUTH_TOKEN)
-
-        ngrok.kill()
-
-        http_tunnel = ngrok.connect(PORT)
-        public_url = http_tunnel.public_url
-
-       
-        logger.info(f"Ngrok started: {public_url}")
-        print(f"\n{'='*60}")
-        print(f" Public URL: {public_url}")
-        print(f"{'='*60}\n")
-
-        return public_url
-    except Exception as e:
-        logger.error(f"Ngrok Error: {str(e)}")
-        print(f" Failed to start ngrok: {str(e)}")
-        return None
-
 if __name__ == "__main__":
-    
     atexit.register(cleanup)
-
-    
-
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-    
+    app.config['DEBUG'] = False
     app.run(host='0.0.0.0', port=PORT)
