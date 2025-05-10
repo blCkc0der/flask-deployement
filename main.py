@@ -561,3 +561,18 @@ if __name__ == "__main__":
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     app.config['DEBUG'] = False
     app.run(host='0.0.0.0', port=PORT)
+```
+<audio id="audio-player" controls autoplay></audio>
+<script>
+    // Example: Autoplay the audio when the file is ready
+    function playAudio(audioUrl) {
+        const audioPlayer = document.getElementById('audio-player');
+        audioPlayer.src = audioUrl;
+        audioPlayer.play().catch(error => {
+            console.error("Autoplay failed:", error);
+        });
+    }
+
+    // Call this function with the audio URL
+    playAudio('/audio/result_123456789.mp3');
+</script>
