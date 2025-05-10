@@ -100,7 +100,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration
-PORT = 5000
+PORT = int(os.getenv("PORT", 5000))  # Use Render's PORT environment variable or default to 5000
 UPLOAD_FOLDER = '/tmp/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -560,5 +560,5 @@ if __name__ == "__main__":
     atexit.register(cleanup)
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     app.config['DEBUG'] = False
-    app.run(host='0.0.0.0', port=PORT)
+    app.run(host='0.0.0.0', port=PORT)  # Use the PORT variable here
 
