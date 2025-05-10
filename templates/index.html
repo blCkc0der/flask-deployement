@@ -69,7 +69,10 @@
             <h3>Analysis Result:</h3>
             <img id="result-image" class="result-image">
             <p id="analysis-text"></p>
-            <audio id="audio-player" controls autoplay></audio>
+            <audio id="audio-player" controls autoplay>
+                <source src="/audio/result_123456789.mp3" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
         </div>
     </div>
 
@@ -86,164 +89,14 @@
             }
         });
 
-        // Preview uploaded image
-        document.getElementById('image-file').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const img = document.getElementById('preview-image');
-                    img.src = event.target.result;
-                    img.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        // Single image analysis
-        document.getElementById('analyze-btn').addEventListener('click', async () => {
-            const fileInput = document.getElementById('image-file');
-            const urlInput = document.getElementById('image-url').value;
-            const resultDiv = document.getElementById('result');
-            const loading = document.getElementById('loading-single');
-
-            const formData = new FormData();
-
-            if (fileInput.files.length > 0) {
-                formData.append('image', fileInput.files[0]);
-            } else if (urlInput) {
-                formData.append('image_url', urlInput);
-            } else {
-                alert('Please upload an image or provide a URL');
-                return;
-            }
-
-            try {
-                // Show loading indicator
-                loading.style.display = 'block';
-                resultDiv.style.display = 'none';
-
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('analysis-text').textContent = data.analysis;
-
-                    // Display the analyzed image with label overlay
-                    const resultImage = document.getElementById('result-image');
-                    resultImage.src = data.image_url;
-
-                    // Set up audio player
-                    const audioPlayer = document.getElementById('audio-player');
-                    audioPlayer.src = data.audio_url;
-                    audioPlayer.play();
-
-                    resultDiv.style.display = 'block';
-                } else {
-                    throw new Error(await response.text());
-                }
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            } finally {
-                loading.style.display = 'none';
-            }
-        });
-
-        // Livestream processing
-        const startBtn = document.getElementById('start-stream-btn');
-        const stopBtn = document.getElementById('stop-stream-btn');
-        const statusSpan = document.getElementById('stream-status');
-        const progressContainer = document.getElementById('stream-progress-container');
-        const progressBar = document.getElementById('stream-progress');
-        let eventSource;
-        let intervalId;
-
-        startBtn.addEventListener('click', async () => {
-            const streamUrl = document.getElementById('stream-url').value;
-            const interval = document.getElementById('interval').value;
-
-            if (!streamUrl) {
-                alert('Please enter a stream URL');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/start_stream', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ stream_url: streamUrl, interval: parseInt(interval) })
-                });
-
-                if (response.ok) {
-                    statusSpan.textContent = "Processing";
-                    statusSpan.className = "status status-active";
-                    startBtn.disabled = true;
-                    stopBtn.disabled = false;
-                    progressContainer.style.display = 'block';
-
-                    // Update progress bar based on interval
-                    let progress = 0;
-                    progressBar.style.width = '0%';
-
-                    intervalId = setInterval(() => {
-                        progress = (progress + 1) % (parseInt(interval) + 1);
-                        const percentage = (progress / parseInt(interval)) * 100;
-                        progressBar.style.width = `${percentage}%`;
-                    }, 1000);
-
-                    // Listen for updates
-                    eventSource = new EventSource('/api/stream_updates');
-
-                    eventSource.onmessage = (event) => {
-                        const data = JSON.parse(event.data);
-                        if (data.image_url && data.audio_url) {
-                            document.getElementById('analysis-text').textContent = data.analysis;
-                            document.getElementById('result-image').src = data.image_url;
-
-                            const audioPlayer = document.getElementById('audio-player');
-                            audioPlayer.src = data.audio_url;
-                            audioPlayer.play();
-
-                            document.getElementById('result').style.display = 'block';
-
-                            // Reset progress bar
-                            progress = 0;
-                            progressBar.style.width = '0%';
-                        }
-                    };
-                } else {
-                    throw new Error(await response.text());
-                }
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            }
-        });
-
-        stopBtn.addEventListener('click', async () => {
-            try {
-                await fetch('/api/stop_stream', { method: 'POST' });
-                statusSpan.textContent = "Idle";
-                statusSpan.className = "status status-idle";
-                startBtn.disabled = false;
-                stopBtn.disabled = true;
-                progressContainer.style.display = 'none';
-
-                if (intervalId) {
-                    clearInterval(intervalId);
-                }
-
-                if (eventSource) {
-                    eventSource.close();
-                }
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            }
-        });
+        // Example: Autoplay the audio when the file is ready
+        function playAudio(audioUrl) {
+            const audioPlayer = document.getElementById('audio-player');
+            audioPlayer.src = audioUrl;
+            audioPlayer.play().catch(error => {
+                console.error("Autoplay failed:", error);
+            });
+        }
     </script>
 </body>
 </html>
-
-
