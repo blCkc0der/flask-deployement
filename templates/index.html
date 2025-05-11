@@ -89,14 +89,112 @@
             }
         });
 
-        // Example: Autoplay the audio when the file is ready
-        function playAudio(audioUrl) {
-            const audioPlayer = document.getElementById('audio-player');
-            audioPlayer.src = audioUrl;
-            audioPlayer.play().catch(error => {
-                console.error("Autoplay failed:", error);
-            });
-        }
+        // Analyze Image Button
+        document.getElementById('analyze-btn').addEventListener('click', async function() {
+            const fileInput = document.getElementById('image-file');
+            const imageUrlInput = document.getElementById('image-url');
+            const loadingIndicator = document.getElementById('loading-single');
+            const previewImage = document.getElementById('preview-image');
+            const resultDiv = document.getElementById('result');
+            const resultImage = document.getElementById('result-image');
+            const analysisText = document.getElementById('analysis-text');
+
+            loadingIndicator.style.display = 'block';
+            resultDiv.style.display = 'none';
+
+            const formData = new FormData();
+            if (fileInput.files.length > 0) {
+                formData.append('image', fileInput.files[0]);
+            } else if (imageUrlInput.value.trim() !== '') {
+                formData.append('image_url', imageUrlInput.value.trim());
+            } else {
+                alert('Please provide an image file or URL.');
+                loadingIndicator.style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                } else {
+                    previewImage.src = `data:image/jpeg;base64,${data.image_b64}`;
+                    previewImage.style.display = 'block';
+                    resultImage.src = `/images/${data.image_path}`;
+                    analysisText.textContent = data.analysis;
+                    resultDiv.style.display = 'block';
+                }
+            } catch (error) {
+                alert('An error occurred while analyzing the image.');
+            } finally {
+                loadingIndicator.style.display = 'none';
+            }
+        });
+
+        // Start Stream Button
+        document.getElementById('start-stream-btn').addEventListener('click', async function() {
+            const streamUrlInput = document.getElementById('stream-url');
+            const intervalSelect = document.getElementById('interval');
+            const streamStatus = document.getElementById('stream-status');
+            const stopStreamBtn = document.getElementById('stop-stream-btn');
+
+            if (streamUrlInput.value.trim() === '') {
+                alert('Please provide a livestream URL.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/start_stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        stream_url: streamUrlInput.value.trim(),
+                        interval: parseInt(intervalSelect.value)
+                    })
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                } else {
+                    streamStatus.textContent = 'Active';
+                    streamStatus.classList.remove('status-idle');
+                    streamStatus.classList.add('status-active');
+                    stopStreamBtn.disabled = false;
+                }
+            } catch (error) {
+                alert('An error occurred while starting the livestream.');
+            }
+        });
+
+        // Stop Stream Button
+        document.getElementById('stop-stream-btn').addEventListener('click', async function() {
+            const streamStatus = document.getElementById('stream-status');
+            const stopStreamBtn = document.getElementById('stop-stream-btn');
+
+            try {
+                const response = await fetch('/api/stop_stream', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                } else {
+                    streamStatus.textContent = 'Idle';
+                    streamStatus.classList.remove('status-active');
+                    streamStatus.classList.add('status-idle');
+                    stopStreamBtn.disabled = true;
+                }
+            } catch (error) {
+                alert('An error occurred while stopping the livestream.');
+            }
+        });
     </script>
 </body>
 </html>
