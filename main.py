@@ -252,57 +252,73 @@ def download_image(url):
 
 def capture_stream_frame(stream_url, timeout=10):
     """
-    Robust frame capture with enhanced error handling and connection management
+    Capture a frame from a video stream (RTMP or standard).
     Args:
-        stream_url: URL of the video stream
+        stream_url: URL of the video stream (RTMP, HTTP, RTSP, etc.)
         timeout: Maximum time to wait for a frame (seconds)
     Returns:
         frame or None if capture fails
     """
     logger.info(f"Attempting to capture from: {stream_url}")
-    
-    # Clean up URL 
-    stream_url = stream_url.strip()
-    
-    for attempt in range(3):
-        try:
-          
-            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)  
-            
-            if not cap.isOpened():
-                logger.warning(f"Failed to open stream: {stream_url}")
-                cap.release()
-                time.sleep(1)
-                continue
-                
-            # Configure capture properties
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  
-            
-            
-            start_time = time.time()
-            while (time.time() - start_time) < timeout:
-                ret, frame = cap.read()
-                if ret and frame is not None and frame.size > 0:
-                    logger.info(f"Successfully captured frame from {stream_url}")
-                    cap.release()
-                    return frame
-                time.sleep(0.2)
-            
-            logger.warning(f"Timeout waiting for frame from {stream_url}")
-            cap.release()
-            
-        except Exception as e:
-            logger.warning(f"Capture attempt {attempt+1} failed: {str(e)}")
-            
-            try:
-                if 'cap' in locals() and cap is not None:
-                    cap.release()
-            except:
-                pass
-            time.sleep(1)
 
-    logger.error(f"All capture attempts failed for {stream_url}")
-    return None
+    if stream_url.startswith("rtmp://"):
+        # Use FFmpeg for RTMP streams
+        ffmpeg_command = [
+            "ffmpeg",
+            "-i", stream_url,  # Input stream URL
+            "-frames:v", "1",  # Capture only one frame
+            "-f", "image2pipe",  # Output as raw image data
+            "-vcodec", "png",  # Use PNG format
+            "-"
+        ]
+
+        try:
+            process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate(timeout=timeout)
+
+            if process.returncode != 0:
+                logger.error(f"FFmpeg error: {stderr.decode('utf-8')}")
+                return None
+
+            # Convert the raw image data to an OpenCV image
+            image = np.frombuffer(stdout, np.uint8)
+            frame = cv2.imdecode(image, cv2.IMREAD_COLOR)
+
+            if frame is not None:
+                logger.info("Successfully captured frame from RTMP stream")
+            return frame
+        except Exception as e:
+            logger.error(f"Error capturing frame from RTMP stream: {str(e)}")
+            return None
+    else:
+        # Use OpenCV for standard streams
+        for attempt in range(3):
+            try:
+                cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
+                if not cap.isOpened():
+                    logger.warning(f"Failed to open stream: {stream_url}")
+                    cap.release()
+                    time.sleep(1)
+                    continue
+
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                start_time = time.time()
+                while (time.time() - start_time) < timeout:
+                    ret, frame = cap.read()
+                    if ret and frame is not None and frame.size > 0:
+                        logger.info(f"Successfully captured frame from {stream_url}")
+                        cap.release()
+                        return frame
+                    time.sleep(0.2)
+
+                logger.warning(f"Timeout waiting for frame from {stream_url}")
+                cap.release()
+            except Exception as e:
+                logger.warning(f"Capture attempt {attempt+1} failed: {str(e)}")
+                time.sleep(1)
+
+        logger.error(f"All capture attempts failed for {stream_url}")
+        return None
 
 def play_audio(audio_path):
     """Auto-play audio on default system speaker."""
