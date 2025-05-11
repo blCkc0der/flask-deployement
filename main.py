@@ -26,6 +26,7 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 import httpx
 import re
+from torchvision.models import ResNet18_Weights
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
@@ -117,9 +118,10 @@ stream_lock = threading.Lock()
 # Load pre-trained ResNet18 model
 def load_model():
     try:
-        
-        model = models.resnet18(pretrained=True)
-        model.eval()  
+        # Use the new `weights` parameter
+        weights = ResNet18_Weights.IMAGENET1K_V1
+        model = models.resnet18(weights=weights)
+        model.eval()
 
         with open('imagenet_classes.txt', 'r') as f:
             categories = [s.strip() for s in f.readlines()]
@@ -127,7 +129,6 @@ def load_model():
         return model, categories
     except Exception as e:
         logger.error(f"Model loading error: {str(e)}")
-       
         return None, ["Unknown"]
 
 # load the model
